@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaxCredible Template Maker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <link rel="stylesheet" href="template-maker.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: { mc: { blue: '#38bdf8', dark: '#0f172a' } },
+                    fontFamily: { 
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="selection:bg-sky-500 selection:text-white">
+
+    <!-- Ambient Background -->
+    <div class="ambient-background">
+        <div class="blob b-1"></div>
+        <div class="blob b-2"></div>
+        <div class="blob b-3"></div>
+    </div>
+
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-content">
+            <div class="logo-container group" onclick="window.location.reload()">
+                <div class="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-sky-500/30 mr-3 transition-transform group-hover:scale-105">M</div>
+                <span class="font-outfit font-bold text-xl text-white tracking-wide group-hover:text-sky-200 transition-colors">MaxCredible</span>
+            </div>
+            <div class="nav-controls flex items-center gap-4">
+                <a href="https://app.maxcredible.com/welcome" class="text-sm font-semibold text-slate-300 hover:text-white transition-colors hidden sm:block">Login</a>
+                <a href="https://app.maxcredible.com/signup" class="nav-cta-btn">Sign Up</a>
+            </div>
+        </div>
+    </nav>
+
+    
+    <div id="upload-section" class="max-w-4xl mx-auto mt-32 p-6 bg-slate-800 rounded-xl border border-slate-700">
+    <h2 class="text-2xl font-outfit font-bold text-white mb-4">Upload Invoice Data</h2>
+    <input type="file" id="csv-upload" accept=".csv" class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-sky-500/10 file:text-sky-400 hover:file:bg-sky-500/20 cursor-pointer">
+</div>
+
+<div id="dashboard-section" class="max-w-6xl mx-auto mt-32 hidden">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+            <h3 class="text-slate-400 text-sm mb-1">Total Outstanding</h3>
+            <p id="stat-total" class="text-3xl font-outfit font-bold text-white">£0</p>
+        </div>
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+            <h3 class="text-slate-400 text-sm mb-1">180+ Days Overdue</h3>
+            <p id="stat-critical" class="text-3xl font-outfit font-bold text-legacy">£0</p>
+        </div>
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+            <h3 class="text-slate-400 text-sm mb-1">Unallocated Credits</h3>
+            <p id="stat-credits" class="text-3xl font-outfit font-bold text-emerald-400">£0</p>
+        </div>
+    </div>
+    
+    <button onclick="toggleSummaryDrawer()" class="mb-8 bg-sky-500 text-slate-900 px-6 py-2 rounded-full font-bold hover:bg-sky-400 transition-colors">
+        View AI Summary
+    </button>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col">
+            <h3 class="font-outfit font-bold text-white mb-6">Outstanding by aging bucket</h3>
+            <div id="aging-chart-container" class="flex items-end justify-between gap-2 h-48 w-full mt-auto"></div>
+        </div>
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col">
+            <h3 class="font-outfit font-bold text-white mb-6">Top Debtors</h3>
+            <div id="debtor-chart-container" class="space-y-4 w-full mt-auto"></div>
+        </div>
+    </div>
+
+    <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-900/50 font-outfit text-slate-400">
+                <tr>
+                    <th class="px-6 py-4">Invoice ID</th>
+                    <th class="px-6 py-4">Debtor</th>
+                    <th class="px-6 py-4">Days Overdue</th>
+                    <th class="px-6 py-4">Amount</th>
+                    <th class="px-6 py-4">Risk</th>
+                    <th class="px-6 py-4">Action</th>
+                </tr>
+            </thead>
+            <tbody id="invoice-table-body" class="divide-y divide-slate-700/50">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="summary-drawer" class="fixed inset-y-0 right-0 w-full max-w-md bg-slate-900 border-l border-slate-700 transform translate-x-full transition-transform duration-300 ease-in-out z-50 p-6 overflow-y-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-outfit font-bold text-white">Portfolio Summary</h2>
+        <button onclick="toggleSummaryDrawer()" class="text-slate-400 hover:text-white">
+            <i class="ph-bold ph-x text-xl"></i>
+        </button>
+    </div>
+    <div id="summary-content" class="text-slate-300 space-y-4 text-sm leading-relaxed">
+        </div>
+</div>
+    
+    <!-- BUILDER SECTION -->
+    <section id="template-builder-section" class="min-h-screen pt-28 pb-10 flex flex-col justify-center relative overflow-hidden z-10 hidden">
+        <div class="w-[95%] max-w-[1600px] mx-auto px-2 lg:px-6 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-start h-full">
+            
+            <!-- Left Panel: Controls -->
+            <div id="mobile-control-panel" class="space-y-6 h-full flex flex-col justify-center transition-all duration-300 w-full">
+            <div class="hidden lg:block pl-2">
+                <button onclick="switchView('dashboard-section')" class="mb-6 text-sky-400 hover:text-sky-300 text-sm font-bold flex items-center gap-2 transition-colors">
+                    <i class="ph-bold ph-arrow-left"></i> Back to Dashboard
+                </button>
+                <h2 class="font-outfit text-3xl lg:text-4xl font-bold text-white mb-2">Craft your correspondence.</h2>
+                    <p class="text-slate-400">Input details and customize the layout to match your brand.</p>
+                </div>
+
+                <div class="smart-card p-4 lg:p-6">
+                    <div class="lg:custom-scrollbar lg:overflow-y-auto lg:max-h-[55vh] pr-2 space-y-4">
+                        
+                        <!-- Step 1: Data Mode -->
+                        <div class="bg-slate-900/60 border border-white/5 rounded-xl overflow-hidden transition-all duration-300">
+                            <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5" onclick="toggleStep(1)">
+                                <h3 class="font-outfit text-sm font-bold text-slate-200 flex items-center gap-3"><span class="flex items-center justify-center w-6 h-6 rounded-full bg-sky-500 text-white text-xs" id="badge-step-1">1</span> Data Source</h3>
+                                <i class="ph-bold ph-caret-down text-slate-500 transition-transform duration-300" id="icon-step-1"></i>
+                            </div>
+                            <div id="step-1" class="max-h-0 transition-all duration-500 ease-in-out overflow-hidden">
+                                <div class="p-4 border-t border-white/5 bg-slate-900/30">
+                                    <p class="text-xs text-slate-400 mb-3">Do you want to use placeholders to make a template, or fill in real data now?</p>
+                                    <div class="flex gap-2">
+                                        <button type="button" id="btn-data-real" onclick="toggleDataMode('real')" class="flex-1 py-2 rounded-lg text-xs font-bold bg-sky-500 text-white transition-all shadow-md">Real Data</button>
+                                        <button type="button" id="btn-data-mock" onclick="toggleDataMode('mock')" class="flex-1 py-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all">Placeholders</button>
+                                    </div>
+                                    <button onclick="toggleStep(2)" class="w-full mt-4 py-2 text-xs text-sky-400 hover:text-sky-300 flex justify-center items-center gap-1 font-bold" id="btn-next-step-1">Next Step <i class="ph-bold ph-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Invoice Details -->
+                        <div class="bg-slate-900/60 border border-white/5 rounded-xl overflow-hidden transition-all duration-300" id="step-card-2">
+                            <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5" onclick="toggleStep(2)">
+                                <h3 class="font-outfit text-sm font-bold text-slate-200 flex items-center gap-3"><span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs" id="badge-step-2">2</span> The Invoice</h3>
+                                <i class="ph-bold ph-caret-down text-slate-500 transition-transform duration-300" id="icon-step-2"></i>
+                            </div>
+                            <div id="step-2" class="max-h-0 transition-all duration-500 ease-in-out overflow-hidden">
+                                <div class="p-4 space-y-4 border-t border-white/5 bg-slate-900/30">
+                                    <div class="flex gap-3">
+                                        <div class="w-1/2 space-y-1"><label class="text-[10px] text-slate-500 uppercase font-semibold">Invoice #</label><input type="text" id="invoice-number" placeholder="INV-001" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()"></div>
+                                        <div class="w-1/2 space-y-1"><label class="text-[10px] text-slate-500 uppercase font-semibold">Due Date</label><input type="date" id="invoice-due" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()"></div>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold flex justify-between">Line Items <button onclick="addLineItem()" class="text-sky-400 hover:text-sky-300">+ Add</button></label>
+                                        <div id="line-items-container" class="space-y-2">
+                                            <div class="flex gap-2 line-item"><input type="text" placeholder="Description" class="item-desc flex-1 bg-slate-900 border border-slate-700 text-white text-xs rounded px-2 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()"><input type="number" placeholder="Qty" class="item-qty w-12 bg-slate-900 border border-slate-700 text-white text-xs rounded px-2 text-center focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()"><input type="number" placeholder="Price" class="item-price w-20 bg-slate-900 border border-slate-700 text-white text-xs rounded px-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()"></div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3 items-center">
+                                        <div class="space-y-1">
+                                            <label class="text-[10px] text-slate-500 uppercase font-semibold">Currency</label>
+                                            <select id="currency-selector" onchange="appState.currency = this.value; compileEmailPreview();" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-2 focus:border-sky-500 focus:outline-none">
+                                                <!-- Automatically populated by JavaScript Intl API -->
+                                            </select>
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label class="text-[10px] text-slate-500 uppercase font-semibold">Global VAT (%)</label>
+                                            <input type="number" id="invoice-vat" placeholder="0" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-2 text-center focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                        </div>
+                                    </div>
+                                    <button onclick="toggleStep(3)" class="w-full mt-2 py-2 text-xs text-sky-400 hover:text-sky-300 flex justify-center items-center gap-1 font-bold">Next Step <i class="ph-bold ph-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Client -->
+                        <div class="bg-slate-900/60 border border-white/5 rounded-xl overflow-hidden transition-all duration-300" id="step-card-3">
+                            <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5" onclick="toggleStep(3)">
+                                <h3 class="font-outfit text-sm font-bold text-slate-200 flex items-center gap-3"><span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs" id="badge-step-3">3</span> Client Details</h3>
+                                <i class="ph-bold ph-caret-down text-slate-500 transition-transform duration-300" id="icon-step-3"></i>
+                            </div>
+                            <div id="step-3" class="max-h-0 transition-all duration-500 ease-in-out overflow-hidden">
+                                <div class="p-4 space-y-3 border-t border-white/5 bg-slate-900/30">
+                                    <input type="text" id="client-name" placeholder="Client Name" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                    <input type="text" id="client-email" placeholder="client@email.com" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                    <button onclick="toggleStep(4)" class="w-full mt-2 py-2 text-xs text-sky-400 hover:text-sky-300 flex justify-center items-center gap-1 font-bold">Next Step <i class="ph-bold ph-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Company & Bank -->
+                        <div class="bg-slate-900/60 border border-white/5 rounded-xl overflow-hidden transition-all duration-300">
+                            <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5" onclick="toggleStep(4)">
+                                <h3 class="font-outfit text-sm font-bold text-slate-200 flex items-center gap-3"><span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs" id="badge-step-4">4</span> Your Company</h3>
+                                <i class="ph-bold ph-caret-down text-slate-500 transition-transform duration-300" id="icon-step-4"></i>
+                            </div>
+                            <div id="step-4" class="max-h-0 transition-all duration-500 ease-in-out overflow-hidden">
+                                <div class="p-4 space-y-3 border-t border-white/5 bg-slate-900/30">
+                                    <input type="text" id="sender-name" placeholder="Your Company Name" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                    
+                                    <div class="mt-4 border-t border-slate-700/50 pt-3">
+                                        <p class="text-[10px] text-sky-400 font-semibold mb-2 flex items-center gap-1"><i class="ph-bold ph-info"></i> Tell your client where to pay (we won't store this information).</p>
+                                        <div class="grid grid-cols-2 gap-2 mb-2">
+                                            <input type="text" id="bank-name" placeholder="Bank Name" class="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                            <input type="text" id="bank-bic" placeholder="BIC/SWIFT" class="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                        </div>
+                                        <input type="text" id="bank-iban" placeholder="IBAN" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:border-sky-500 focus:outline-none" oninput="compileEmailPreview()">
+                                    </div>
+                                    <button onclick="toggleStep(5)" class="w-full mt-2 py-2 text-xs text-sky-400 hover:text-sky-300 flex justify-center items-center gap-1 font-bold">Next Step <i class="ph-bold ph-arrow-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: Design -->
+                        <div class="bg-slate-900/60 border border-white/5 rounded-xl overflow-hidden transition-all duration-300">
+                            <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5" onclick="toggleStep(5)">
+                                <h3 class="font-outfit text-sm font-bold text-slate-200 flex items-center gap-3"><span class="flex items-center justify-center w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs" id="badge-step-5">5</span> Design & Tone</h3>
+                                <i class="ph-bold ph-caret-down text-slate-500 transition-transform duration-300" id="icon-step-5"></i>
+                            </div>
+                            <div id="step-5" class="max-h-0 transition-all duration-500 ease-in-out overflow-hidden">
+                                <div class="p-4 space-y-5 border-t border-white/5 bg-slate-900/30">
+                                    
+                                    <!-- Logo Upload -->
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold">Brand Logo</label>
+                                        <label id="logo-upload-zone" class="cursor-pointer w-full bg-slate-900/50 border-2 border-dashed border-slate-700 hover:border-sky-500 text-slate-300 text-xs px-4 py-4 rounded-xl transition-all flex flex-col items-center justify-center gap-2 group">
+                                            <i class="ph-bold ph-cloud-arrow-up text-2xl text-slate-500 group-hover:text-sky-400 transition-colors" id="upload-icon"></i>
+                                            <span id="upload-text" class="font-medium">Click or drag logo to upload</span>
+                                            <input type="file" class="hidden" accept="image/png, image/jpeg, image/svg+xml" onchange="handleLogoUpload(event)">
+                                        </label>
+                                    </div>
+
+                                    <!-- Tone UI Grid -->
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold">Message Tone</label>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button onclick="selectTone('direct', this)" class="tone-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-target text-sky-400"></i> Direct</button>
+                                            <button onclick="selectTone('friendly', this)" class="tone-btn flex items-center gap-2 bg-sky-500/20 border border-sky-500 text-white text-xs rounded px-3 py-2 transition-all focus:outline-none ring-1 ring-sky-500"><i class="ph-bold ph-hand-waving text-white"></i> Friendly</button>
+                                            <button onclick="selectTone('formal', this)" class="tone-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-briefcase text-sky-400"></i> Formal</button>
+                                            <button onclick="selectTone('informative', this)" class="tone-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-info text-sky-400"></i> Informative</button>
+                                            <button onclick="selectTone('aggressive', this)" class="tone-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-warning text-sky-400"></i> Aggressive</button>
+                                            <button onclick="selectTone('informal', this)" class="tone-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-coffee text-sky-400"></i> Informal</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Color Picker -->
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold">Brand Color</label>
+                                        <div class="flex gap-3 flex-wrap">
+                                            <button onclick="selectColor('#0ea5e9', this)" class="color-btn w-7 h-7 rounded-full bg-sky-500 ring-2 ring-offset-2 ring-offset-slate-900 ring-white focus:outline-none transition-all"></button>
+                                            <button onclick="selectColor('#10b981', this)" class="color-btn w-7 h-7 rounded-full bg-emerald-500 focus:outline-none transition-all"></button>
+                                            <button onclick="selectColor('#9333ea', this)" class="color-btn w-7 h-7 rounded-full bg-purple-600 focus:outline-none transition-all"></button>
+                                            <button onclick="selectColor('#f43f5e', this)" class="color-btn w-7 h-7 rounded-full bg-rose-500 focus:outline-none transition-all"></button>
+                                            <button onclick="selectColor('#f59e0b', this)" class="color-btn w-7 h-7 rounded-full bg-amber-500 focus:outline-none transition-all"></button>
+                                            <button onclick="selectColor('#0f172a', this)" class="color-btn w-7 h-7 rounded-full bg-slate-900 border border-slate-700 focus:outline-none transition-all"></button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Typography Options -->
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold block">Typography</label>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button onclick="selectFont('Helvetica, Arial, sans-serif', this)" class="font-btn flex items-center justify-between bg-sky-500/20 border border-sky-500 text-white text-xs rounded px-3 py-2 transition-all focus:outline-none ring-1 ring-sky-500" style="font-family: Helvetica, Arial, sans-serif;">Modern <i class="ph-bold ph-check text-white font-check"></i></button>
+                                            <button onclick="selectFont('Georgia, serif', this)" class="font-btn flex items-center justify-between bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none" style="font-family: Georgia, serif;">Classic <i class="ph-bold ph-check text-transparent font-check"></i></button>
+                                            <button onclick="selectFont('Tahoma, sans-serif', this)" class="font-btn flex items-center justify-between bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none" style="font-family: Tahoma, sans-serif;">Clean <i class="ph-bold ph-check text-transparent font-check"></i></button>
+                                            <button onclick="selectFont('&quot;Trebuchet MS&quot;, sans-serif', this)" class="font-btn flex items-center justify-between bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none" style="font-family: 'Trebuchet MS', sans-serif;">Geometric <i class="ph-bold ph-check text-transparent font-check"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Header Style Options -->
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold block">Header Style</label>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button onclick="selectHeader('classic', this)" class="header-btn flex items-center gap-2 bg-sky-500/20 border border-sky-500 text-white text-xs rounded px-3 py-2 transition-all focus:outline-none ring-1 ring-sky-500"><i class="ph-bold ph-minus text-white icon-active"></i> Thin Line</button>
+                                            <button onclick="selectHeader('bold-top', this)" class="header-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-equals text-sky-400 icon-inactive"></i> Bold Line</button>
+                                            <button onclick="selectHeader('dashed', this)" class="header-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-dots-three text-sky-400 icon-inactive"></i> Dashed Under</button>
+                                            <button onclick="selectHeader('block', this)" class="header-btn flex items-center gap-2 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-square-half-bottom text-sky-400 icon-inactive"></i> Solid Block</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Layout UI Grid -->
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] text-slate-500 uppercase font-semibold block">Invoice Layout</label>
+                                        <div class="grid grid-cols-1 gap-2">
+                                            <button onclick="selectStyle('table', this)" class="style-btn w-full flex items-center gap-3 bg-sky-500/20 border border-sky-500 text-white text-xs rounded px-3 py-2 transition-all focus:outline-none ring-1 ring-sky-500"><i class="ph-bold ph-table text-lg text-white"></i> <span class="text-left">Formal Table<br><span class="subtext text-[9px] text-sky-200 font-normal">Standard bordered grid</span></span></button>
+                                            <button onclick="selectStyle('card', this)" class="style-btn w-full flex items-center gap-3 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-identification-card text-lg text-sky-400"></i> <span class="text-left">Simple Card<br><span class="subtext text-[9px] text-slate-500 font-normal">Modern boxed summary</span></span></button>
+                                            <button onclick="selectStyle('bold', this)" class="style-btn w-full flex items-center gap-3 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-text-b text-lg text-sky-400"></i> <span class="text-left">High Contrast (Bold)<br><span class="subtext text-[9px] text-slate-500 font-normal">Dark headers, prominent totals</span></span></button>
+                                            <button onclick="selectStyle('subtle', this)" class="style-btn w-full flex items-center gap-3 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-3 py-2 transition-all focus:outline-none"><i class="ph-bold ph-feather text-lg text-sky-400"></i> <span class="text-left">Minimalist (Subtle)<br><span class="subtext text-[9px] text-slate-500 font-normal">Clean, borderless lines</span></span></button>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Final Action Block -->
+                <div class="smart-card p-6 mt-2 mb-20 lg:mb-0">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Ship Template to Inbox</label>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <input type="email" id="target-email" placeholder="your@email.com" class="flex-1 bg-slate-900 border border-slate-700 text-white rounded-full px-4 py-3 focus:outline-none focus:border-sky-500 transition-all placeholder-slate-500">
+                        <button onclick="dispatchEmail()" class="g-cta-btn">
+                            <i class="ph-bold ph-paper-plane-right"></i> Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Preview -->
+            <div id="mobile-preview-panel" class="perspective-1000 hidden lg:flex justify-center items-center h-full w-full transition-all duration-700">
+                <div id="preview-container" class="relative bg-slate-100 rounded-2xl shadow-2xl min-h-[650px] w-full max-w-2xl mx-auto transform transition-all duration-500 border border-slate-300 overflow-hidden rotate-y-0 lg:rotate-y-6 flex justify-center">
+                    <!-- Email HTML injected here -->
+                    <div id="email-canvas" class="w-full bg-white h-full overflow-y-auto custom-scrollbar"></div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- MOBILE STICKY TOGGLE BAR -->
+    <div class="fixed bottom-0 left-0 w-full bg-slate-900/90 backdrop-blur-lg border-t border-white/10 p-4 lg:hidden z-50 transition-transform duration-300 flex justify-center" id="mobile-toggle-bar">
+        <button id="btn-mobile-toggle" onclick="toggleMobilePreview()" class="w-full max-w-sm g-cta-btn">
+            <i class="ph-bold ph-eye text-lg"></i> View Live Preview
+        </button>
+    </div>
+
+    <!-- SUCCESS MODAL -->
+    <div id="success-modal" class="fixed inset-0 z-[9999] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <!-- Blur Backdrop -->
+        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="closeSuccessModal()"></div>
+        
+        <!-- Modal Card -->
+        <div class="relative bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl w-[90%] max-w-md p-6 lg:p-8 transform scale-95 transition-transform duration-300 flex flex-col items-center text-center" id="success-modal-card">
+            
+            <!-- Close 'X' -->
+            <button onclick="closeSuccessModal()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors focus:outline-none">
+                <i class="ph-bold ph-x text-xl"></i>
+            </button>
+
+            <!-- Icon -->
+            <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mb-5">
+                <i class="ph-bold ph-paper-plane-tilt text-3xl text-emerald-400"></i>
+            </div>
+
+            <h3 class="font-outfit text-2xl font-bold text-white mb-2">Email Sent!</h3>
+            <p class="text-slate-400 text-sm mb-6">Your email has been sent. Please check your inbox.</p>
+            
+            <div class="w-full h-px bg-slate-800 mb-6"></div>
+
+            <p class="font-outfit font-bold text-sky-400 text-lg mb-2">MaxCredible, happy to pay.</p>
+            <p class="text-slate-400 text-xs mb-6 leading-relaxed">Curious about automating your reminders and outstanding invoice management? Start a free MaxCredible trial today.</p>
+            
+            <a href="https://app.maxcredible.com/signup/" target="_blank" class="w-full bg-sky-500 hover:bg-sky-400 text-white font-bold py-3 px-4 rounded-xl transition-colors flex justify-center items-center gap-2">
+                Start Free Trial <i class="ph-bold ph-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+
+        <script src="template-maker.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="dashboard.js"></script>
+    </body>
+</html>
