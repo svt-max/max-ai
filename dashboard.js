@@ -27,22 +27,32 @@ document.getElementById('csv-upload').addEventListener('change', async function(
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: async function(results) {
-            const formattedData = results.data.filter(row => row['Type'] === 'Invoice').map(row => ({
-                invoice_number: row['Invoice ID'],
-                debtor_name: row['Debtor Name'],
-                amount: row['Outstanding'],
-                days_overdue: row['Days Overdue'],
-                status: 'draft'
-            }));
-
-            // Stop and check the payload
-            console.log("Parsed Data:", formattedData);
-            if (formattedData.length === 0) {
-                alert("Upload failed: No rows matched Type='Invoice'. Check your CSV headers.");
+            // Retrieve the active session (anonymous or permanent)
+            const { data: { user }, error: authError } = await _supabase.auth.getUser();
+            
+            if (authError || !user) {
+                alert("Authentication missing. Please refresh the page.");
                 return;
             }
 
-            // Insert into Supabase
+            const formattedData = results.data
+                .filter(row => row['Type'] === 'Invoice' || row['Type'] === 'Credit Note')
+                .map(row => ({
+                    invoice_number: row['Invoice ID'],
+                    debtor_name: row['Debtor Name'],
+                    amount: row['Outstanding'],
+                    days_overdue: row['Days Overdue'],
+                    invoice_type: row['Type'] === 'Credit Note' ? 'credit' : 'invoice',
+                    status: 'draft',
+                    user_id: user.id // Bind data to this user
+                }));
+
+            console.log("Parsed Data:", formattedData);
+            if (formattedData.length === 0) {
+                alert("Upload failed: No rows matched Type='Invoice' or 'Credit Note'. Check your CSV headers.");
+                return;
+            }
+
             const { data, error } = await _supabase.from('invoices').insert(formattedData);
             
             if (error) {
@@ -89,7 +99,8 @@ async function markAsPaid(id) {
     if (error) {
         alert("Could not update status.");
     } else {
-        loadDashboardData(); // Refresh the table
+        showToast("Invoice marked as paid");
+        loadDashboardData(); 
     }
 }
 
@@ -278,4 +289,23 @@ function renderDebtorChart(invoices) {
         </div>
         `;
     }).join('');
+}
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-2xl shadow-emerald-500/20 font-bold font-outfit text-sm transition-all duration-300 transform translate-y-10 opacity-0 z-[9999] flex items-center gap-2 border border-emerald-400';
+    toast.innerHTML = `<i class="ph-bold ph-check-circle text-lg"></i> ${message}`;
+    
+    document.body.appendChild(toast);
+    
+    // Trigger animation frame for CSS transition
+    requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-10', 'opacity-0');
+    });
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.add('translate-y-10', 'opacity-0');
+        setTimeout(() => toast.remove(), 200);
+    }, 3000);
 }
