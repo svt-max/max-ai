@@ -2,6 +2,21 @@ const supabaseUrl = 'https://tdqvjwoiqysxetxhohtc.supabase.co';
 const supabaseKey = 'sb_publishable_zpHOnWoyHHNYqi-Feq8o6w_vSkErwP7';
 const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
+async function ensureSession() {
+    let { data: { user } } = await _supabase.auth.getUser();
+    
+    if (!user) {
+        console.log("No active user found. Generating anonymous session...");
+        const { data, error } = await _supabase.auth.signInAnonymously();
+        if (error) {
+            console.error("Anonymous Auth failed. Did you enable it in the Supabase Dashboard?", error);
+            throw error;
+        }
+        user = data.user;
+    }
+    return user;
+}
+
 // Central View Router
 function switchView(viewId) {
     const views = ['upload-section', 'dashboard-section', 'template-builder-section'];
@@ -27,11 +42,11 @@ document.getElementById('csv-upload').addEventListener('change', async function(
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: async function(results) {
-            // Retrieve the active session (anonymous or permanent)
-            const { data: { user }, error: authError } = await _supabase.auth.getUser();
-            
-            if (authError || !user) {
-                alert("Authentication missing. Please refresh the page.");
+            let user;
+            try {
+                user = await ensureSession();
+            } catch (authError) {
+                alert("Could not establish a secure session. Please check your connection or contact support.");
                 return;
             }
 
@@ -46,7 +61,7 @@ document.getElementById('csv-upload').addEventListener('change', async function(
                     status: 'draft',
                     user_id: user.id // Bind data to this user
                 }));
-
+            
             console.log("Parsed Data:", formattedData);
             if (formattedData.length === 0) {
                 alert("Upload failed: No rows matched Type='Invoice' or 'Credit Note'. Check your CSV headers.");
@@ -87,7 +102,14 @@ async function loadDashboardData() {
 }
 
 // Call this when the page loads
-document.addEventListener('DOMContentLoaded', loadDashboardData);
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await ensureSession();
+        loadDashboardData();
+    } catch (error) {
+        console.error("Failed to initialize app:", error);
+    }
+});
 
 // Add this function to dashboard.js
 async function markAsPaid(id) {
