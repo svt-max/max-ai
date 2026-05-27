@@ -1,5 +1,5 @@
 const supabaseUrl = 'https://tdqvjwoiqysxetxhohtc.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkcXZqd29pcXlzeGV0eGhvaHRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3OTg3OTgsImV4cCI6MjA5NTM3NDc5OH0.fianlRY9upx05erMhxvkO7G2xgnubbdJ4DDYU6zU7b0';
+const supabaseKey = 'sb_publishable_zpHOnWoyHHNYqi-Feq8o6w_vSkErwP7';
 const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
 // Central View Router
@@ -27,23 +27,28 @@ document.getElementById('csv-upload').addEventListener('change', async function(
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: async function(results) {
-            // Map CSV headers to your database schema
             const formattedData = results.data.filter(row => row['Type'] === 'Invoice').map(row => ({
                 invoice_number: row['Invoice ID'],
                 debtor_name: row['Debtor Name'],
                 amount: row['Outstanding'],
                 days_overdue: row['Days Overdue'],
-                status: 'draft' // Default status
+                status: 'draft'
             }));
+
+            // Stop and check the payload
+            console.log("Parsed Data:", formattedData);
+            if (formattedData.length === 0) {
+                alert("Upload failed: No rows matched Type='Invoice'. Check your CSV headers.");
+                return;
+            }
 
             // Insert into Supabase
             const { data, error } = await _supabase.from('invoices').insert(formattedData);
             
             if (error) {
                 console.error("Upload failed:", error);
-                alert("Failed to save invoices to database.");
+                alert(`Database error: ${error.message}`);
             } else {
-                // Fetch fresh data and re-render dashboard
                 loadDashboardData(); 
             }
         }
