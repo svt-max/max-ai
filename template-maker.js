@@ -687,8 +687,11 @@ async function executeSend() {
 
         const { error: dbError } = await _supabase
             .from('invoices')
-            .update({ status: 'sent' })
-            .eq('invoice_number', invoiceId); 
+            .update({ 
+                status: 'sent',
+                debtor_email: email // Captures the target email
+            })
+            .eq('invoice_number', invoiceId);
 
         if (dbError) {
             console.warn("Email sent, but failed to update Supabase status:", dbError);
