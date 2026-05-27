@@ -94,13 +94,13 @@ async function markAsPaid(id) {
 }
 
 function processData(data) {
-    // 1. Separate by Type
-    const invoices = data.filter(row => row['Type'] === 'Invoice');
-    const credits = data.filter(row => row['Type'] === 'Credit Note' || row['Type'] === 'Unallocated Payment');
+    // 1. Data is now exclusively invoices from Supabase
+    const invoices = data;
+    const credits = []; // Credits require a new DB table or 'type' column later
 
-    // 2. Calculate Totals
-    const totalOutstanding = invoices.reduce((sum, inv) => sum + (inv['Outstanding'] || 0), 0);
-    const totalCredits = credits.reduce((sum, cred) => sum + (cred['Outstanding'] || 0), 0);
+    // 2. Calculate Totals using DB keys
+    const totalOutstanding = invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+    const totalCredits = 0;
 
     // 3. Bucket Logic (Replicating Pandas pd.cut)
     let criticalOverdue = 0;
@@ -108,8 +108,8 @@ function processData(data) {
     let agingBuckets = { 'Not yet due': 0, '1-30': 0, '31-60': 0, '61-90': 0, '91-180': 0, '180+': 0 };
 
     invoices.forEach(inv => {
-        const days = inv['Days Overdue'];
-        const amount = inv['Outstanding'];
+        const days = inv.days_overdue || 0;
+        const amount = Number(inv.amount) || 0;
         
         if (days <= 0) agingBuckets['Not yet due'] += amount;
         else if (days <= 30) agingBuckets['1-30'] += amount;
@@ -123,13 +123,13 @@ function processData(data) {
         }
     });
 
-    // Normalized Risk Scoring
-    const maxAmount = Math.max(...invoices.map(i => i['Outstanding'] || 0));
-    const maxDays = Math.max(...invoices.map(i => i['Days Overdue'] || 0));
+    // Normalized Risk Scoring (Added Math.max 1 fallback to prevent division by zero errors)
+    const maxAmount = Math.max(1, ...invoices.map(i => Number(i.amount) || 0));
+    const maxDays = Math.max(1, ...invoices.map(i => i.days_overdue || 0));
     
     invoices.forEach(inv => {
-        inv.SizeScore = ((inv['Outstanding'] || 0) / maxAmount) * 100;
-        inv.DueScore = ((inv['Days Overdue'] || 0) / maxDays) * 100;
+        inv.SizeScore = ((Number(inv.amount) || 0) / maxAmount) * 100;
+        inv.DueScore = ((inv.days_overdue || 0) / maxDays) * 100;
         // Weighted: 60% age, 40% size 
         inv.RiskScore = (inv.DueScore * 0.6) + (inv.SizeScore * 0.4);
     });
@@ -176,25 +176,25 @@ function toggleSummaryDrawer() {
 
 function populateTable(invoices) {
     // Sort by most overdue first
-    invoices.sort((a, b) => b['Days Overdue'] - a['Days Overdue']);
+    invoices.sort((a, b) => (b.days_overdue || 0) - (a.days_overdue || 0));
     
     const tbody = document.getElementById('invoice-table-body');
     tbody.innerHTML = '';
 
     // Only show top 50 to prevent DOM lag, or implement pagination
     invoices.slice(0, 50).forEach(inv => {
-        const safeName = (inv['Debtor Name'] || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const safeName = (inv.debtor_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-slate-800/50 transition-colors';
         tr.innerHTML = `
-            <td class="px-6 py-4 font-mono text-sky-400">${inv['Invoice ID']}</td>
-            <td class="px-6 py-4 font-medium text-white">${inv['Debtor Name']}</td>
+            <td class="px-6 py-4 font-mono text-sky-400">${inv.invoice_number}</td>
+            <td class="px-6 py-4 font-medium text-white">${inv.debtor_name}</td>
             <td class="px-6 py-4">
-                <span class="px-2 py-1 rounded text-xs font-bold ${inv['Days Overdue'] > 90 ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-300'}">
-                    ${inv['Days Overdue']} days
+                <span class="px-2 py-1 rounded text-xs font-bold ${inv.days_overdue > 90 ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-300'}">
+                    ${inv.days_overdue} days
                 </span>
             </td>
-            <td class="px-6 py-4">£${inv['Outstanding'].toLocaleString()}</td>
+            <td class="px-6 py-4">£${Number(inv.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
             <td class="px-6 py-4">
                 ${getRiskBadge(inv.RiskScore, inv.SizeScore, inv.DueScore)}
             </td>
@@ -259,7 +259,7 @@ function renderDebtorChart(invoices) {
     // Aggregate by debtor
     const debtors = {};
     invoices.forEach(inv => {
-        debtors[inv['Debtor Name']] = (debtors[inv['Debtor Name']] || 0) + (inv['Outstanding'] || 0);
+        debtors[inv.debtor_name] = (debtors[inv.debtor_name] || 0) + (Number(inv.amount) || 0);
     });
     
     const sortedDebtors = Object.entries(debtors).sort((a,b) => b[1] - a[1]).slice(0, 5);
