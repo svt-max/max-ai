@@ -592,17 +592,73 @@ function closeSuccessModal() {
     card.classList.add('scale-95');
 }
 
-// --- EMAIL DISPATCH (WITH LEAD GEN DATA & MODAL) ---
+// --- AUTH INTERCEPTOR & MODAL CONTROLS ---
+function openAuthModal() {
+    document.getElementById('auth-modal').classList.remove('opacity-0', 'pointer-events-none');
+    document.getElementById('auth-modal-card').classList.replace('scale-95', 'scale-100');
+}
+
+function closeAuthModal() {
+    document.getElementById('auth-modal').classList.add('opacity-0', 'pointer-events-none');
+    document.getElementById('auth-modal-card').classList.replace('scale-100', 'scale-95');
+}
+
 async function dispatchEmail() {
     const emailInput = document.getElementById('target-email');
-    const sendBtn = emailInput.nextElementSibling;
-    const email = emailInput.value;
-    
-    if(!email) {
+    if(!emailInput.value) {
         alert('Please enter a target email address.');
         return;
     }
 
+    const { data: { user }, error } = await _supabase.auth.getUser();
+    
+    if (error || !user) {
+        alert("Session error. Please refresh the page.");
+        return;
+    }
+
+    // Intercept anonymous users
+    if (user.is_anonymous) {
+        openAuthModal();
+        return;
+    }
+
+    // Proceed if fully registered
+    executeSend(); 
+}
+
+async function upgradeAccountAndSend() {
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+    const btn = document.getElementById('btn-upgrade');
+
+    if (!email || !password) {
+        alert("Email and password required.");
+        return;
+    }
+    
+    btn.innerHTML = '<i class="ph-bold ph-spinner animate-spin"></i> Saving...';
+
+    const { data, error } = await _supabase.auth.updateUser({
+        email: email,
+        password: password
+    });
+
+    if (error) {
+        alert(error.message);
+        btn.innerHTML = 'Create Account';
+        return;
+    }
+
+    closeAuthModal();
+    executeSend(); 
+}
+
+// --- ACTUAL SEND LOGIC ---
+async function executeSend() {
+    const emailInput = document.getElementById('target-email');
+    const sendBtn = emailInput.nextElementSibling;
+    const email = emailInput.value;
     const rawHTML = document.getElementById('email-canvas').innerHTML;
     const senderName = document.getElementById('sender-name') ? document.getElementById('sender-name').value : "MaxCredible";
 
@@ -611,7 +667,6 @@ async function dispatchEmail() {
     sendBtn.disabled = true;
 
     try {
-        // Retrieve the current invoice ID we are working on
         const invoiceId = document.getElementById('invoice-number').value;
 
         const response = await fetch('/api/send', {
@@ -630,24 +685,15 @@ async function dispatchEmail() {
             throw new Error(`Server returned ${response.status}: ${errorText.substring(0, 100)}...`);
         }
 
-        // If the email sent successfully, update Supabase
         const { error: dbError } = await _supabase
             .from('invoices')
             .update({ status: 'sent' })
-            .eq('invoice_number', invoiceId); // Assuming invoice_number is unique for this MVP
+            .eq('invoice_number', invoiceId); 
 
         if (dbError) {
             console.warn("Email sent, but failed to update Supabase status:", dbError);
         }
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Server returned ${response.status}: ${errorText.substring(0, 100)}...`);
-        }
-
-        const result = await response.json();
-
-        // Revert button text and trigger the success modal
         sendBtn.innerHTML = '<i class="ph-bold ph-check"></i> Sent!';
         openSuccessModal();
         
@@ -656,7 +702,6 @@ async function dispatchEmail() {
         alert(`Error: ${error.message}`);
         sendBtn.innerHTML = originalBtnHtml;
     } finally {
-        // Reset the button after 3 seconds regardless of outcome
         setTimeout(() => {
             sendBtn.innerHTML = originalBtnHtml;
             sendBtn.disabled = false;
