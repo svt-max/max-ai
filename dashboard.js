@@ -52,15 +52,28 @@ document.getElementById('csv-upload').addEventListener('change', async function(
 
             const formattedData = results.data
                 .filter(row => row['Type'] === 'Invoice' || row['Type'] === 'Credit Note')
-                .map(row => ({
-                    invoice_number: row['Invoice ID'],
-                    debtor_name: row['Debtor Name'],
-                    amount: row['Outstanding'],
-                    days_overdue: row['Days Overdue'],
-                    invoice_type: row['Type'] === 'Credit Note' ? 'credit' : 'invoice',
-                    status: 'draft',
-                    user_id: user.id // Bind data to this user
-                }));
+                .map(row => {
+                    // Strip currency symbols and commas, keeping only numbers, decimals, and minus signs
+                    const rawAmount = String(row['Outstanding'] || '0').replace(/[^0-9.-]+/g, "");
+                    let cleanAmount = parseFloat(rawAmount) || 0;
+                    
+                    const type = row['Type'] === 'Credit Note' ? 'credit' : 'invoice';
+                    
+                    // Force credit notes to be negative if the CSV exported them as positive
+                    if (type === 'credit' && cleanAmount > 0) {
+                        cleanAmount = -cleanAmount;
+                    }
+
+                    return {
+                        invoice_number: row['Invoice ID'],
+                        debtor_name: row['Debtor Name'],
+                        amount: cleanAmount,
+                        days_overdue: parseInt(row['Days Overdue']) || 0,
+                        invoice_type: type,
+                        status: 'draft',
+                        user_id: user.id 
+                    };
+                });
             
             console.log("Parsed Data:", formattedData);
             if (formattedData.length === 0) {
@@ -127,13 +140,13 @@ async function markAsPaid(id) {
 }
 
 function processData(data) {
-    // 1. Data is now exclusively invoices from Supabase
-    const invoices = data;
-    const credits = []; // Credits require a new DB table or 'type' column later
+    // 1. Separate by DB Column 'invoice_type'
+    const invoices = data.filter(row => row.invoice_type === 'invoice');
+    const credits = data.filter(row => row.invoice_type === 'credit');
 
-    // 2. Calculate Totals using DB keys
+    // 2. Calculate Totals
     const totalOutstanding = invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
-    const totalCredits = 0;
+    const totalCredits = credits.reduce((sum, cred) => sum + (Number(cred.amount) || 0), 0);
 
     // 3. Bucket Logic (Replicating Pandas pd.cut)
     let criticalOverdue = 0;
