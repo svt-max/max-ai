@@ -66,6 +66,12 @@ async function loadDashboardData() {
         return;
     }
 
+    // Gatekeeper: If no active invoices exist, stay on the upload screen
+    if (!invoices || invoices.length === 0) {
+        switchView('upload-section');
+        return; 
+    }
+
     // Pass this data to your existing populateTable and chart functions
     processData(invoices); 
 }
